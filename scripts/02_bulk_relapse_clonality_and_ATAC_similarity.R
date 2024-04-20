@@ -55,7 +55,11 @@ corr_df<-corr_df[complete.cases(corr_df),]
 corr_df$genotype_group[corr_df$genotype_group=="Gain_Loss"]<-"Gain+Loss"
 corr_df$genotype_group<-factor(corr_df$genotype_group, levels = c("Stable","Gain","Loss","Gain+Loss"))
 
-corr_df %>% group_by(genotype_group) %>% summarise(mean = mean(Correlation), n = n())
+#corr_df %>% group_by(genotype_group) %>% summarise(mean = mean(Correlation), num = n())
+
+group_counts <- corr_df %>%
+  group_by(genotype_group) %>%
+  dplyr::summarise(count = n())
 
 col = c(Stable = "#EE3A2D", Gain = "#2270B6", Loss="#70ACD4", `Gain+Loss`="#193D6C")
 
@@ -69,12 +73,38 @@ plt<-ggplot(corr_df, aes(x=genotype_group, y=Correlation, fill=genotype_group)) 
   theme(legend.position = "none") +
   xlab("") +
   ylab("DX vs REL Global Chromatin Similarity") +
+  geom_text(aes(x=genotype_group, y=1, label = paste("n =",count)), stat = 'unique', vjust = 1, data=group_counts)
   #ggtitle("DX vs REL peak accessibility similarity") +
-  stat_compare_means(method="anova")
-  #stat_compare_means(method="t.test", paired = FALSE, comparisons = list(c("Gain","Gain_Loss"),c("Gain","Stable")))
+  # stat_compare_means(method="anova")
+  #stat_compare_means(method="t.test", paired = FALSE, comparisons = list(c("Gain","Gain+Loss"),c("Gain","Stable")))
 
 print(plt)
 
+
+
 pdf("outputs/figure_2/clonal_groups_global_similarity.pdf", width = 4, height = 4)
+print(plt)
+dev.off()
+
+
+plt<-ggplot(corr_df, aes(x=genotype_group, y=Correlation, fill=genotype_group)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2) +
+  scale_fill_manual(values=col) +
+  theme_classic() +
+  scale_y_continuous(limits=c(0.6,1)) +
+  theme(legend.position = "none") +
+  xlab("") +
+  ylab("DX vs REL Global Chromatin Similarity") +
+  geom_text(aes(x=genotype_group, y=1, label = paste("n =",count)), stat = 'unique', vjust = 1, data=group_counts)
+#ggtitle("DX vs REL peak accessibility similarity") +
+# stat_compare_means(method="anova")
+#stat_compare_means(method="t.test", paired = FALSE, comparisons = list(c("Gain","Gain+Loss"),c("Gain","Stable")))
+
+print(plt)
+
+
+
+pdf("outputs/figure_2/clonal_groups_global_similarity_boxplot.pdf", width = 4, height = 4)
 print(plt)
 dev.off()

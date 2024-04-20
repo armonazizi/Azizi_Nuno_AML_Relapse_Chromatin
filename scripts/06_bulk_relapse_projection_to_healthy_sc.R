@@ -552,3 +552,43 @@ classifications<-class::knn(svdReference[,colnames(svdReference)!="CellType"],
 
 projected_bulk_umap$AML_classification<-as.character(classifications[match(rownames(projected_bulk_umap), rownames(svdDisease))])
 saveRDS(projected_bulk_umap, "outputs/bulk_analysis/bulk_pseudo_sc_KNN_classifications.rds")
+
+
+
+
+#### Quantification of blast nearest celltype ####
+projected_bulk_umap<-readRDS("outputs/bulk_analysis/bulk_pseudo_sc_KNN_classifications.rds")
+
+# find the most common celltype for each bulk sample
+library(dplyr)
+most_common_celltype <- projected_bulk_umap[,c("sample", "patient","type", "timepoint", "CellType", "AML_classification")] %>%
+  dplyr::group_by(sample, type, timepoint, AML_classification) %>%
+  dplyr::count() %>%
+  dplyr::group_by(sample, type, timepoint) %>%
+  dplyr::top_n(1, n) %>%
+  dplyr::ungroup()
+
+most_common_celltype<-most_common_celltype[most_common_celltype$timepoint!="scATAC",]
+most_common_celltype<-most_common_celltype[most_common_celltype$type=="Blast",]
+
+celltype_pal<-ArchR::paletteDiscrete(c("B/Plasma-like","Mono-like", "GMP-like", "T/NK-like","DC/Baso-like","CMP/LMPP-like","CLP-like","Erythroid-like","HSC-like"))
+
+# Create stacked barplot with p value
+fisher_result <- fisher.test(table(most_common_celltype$AML_classification, most_common_celltype$timepoint))
+
+p_value <- format(fisher_result$p.value, digits = 2)
+plt<-ggplot(most_common_celltype, aes(x = timepoint, fill = AML_classification)) +
+  geom_bar(position = position_fill(), color="black", linewidth=0.5) +
+  scale_fill_manual(values = celltype_pal) +
+  theme_classic() +
+  labs(title = "Cell Type Distribution by Timepoint",
+       x = "Timepoint",
+       y = "Fraction Of Samples",
+       fill = "AML Classification",
+       subtitle = paste0("Fisher's exact test p-value: ", p_value))
+
+print(plt)
+
+pdf("outputs/bulk_ATAC_projection_plots/DX_vs_REL_all_bulk_AML_celltype_fractions.pdf", width = 4, height = 4)
+plt
+dev.off()

@@ -55,6 +55,7 @@ count_matrix_normalized<-count_matrix_normalized[,lsc_sample_info$name]
 # calculate dx-rel similarity
 lsc_sample_info$sample_type<-paste(lsc_sample_info$sample, lsc_sample_info$type, sep="_")
 lsc_sample_info$case_type<-paste(lsc_sample_info$patient, lsc_sample_info$type, sep="_")
+lsc_sample_info$case_timepoint<-paste(lsc_sample_info$patient, lsc_sample_info$timepoint, sep="_")
 
 count_matrix_collapsed<-collapse_count_matrix(count_matrix_normalized, lsc_sample_info, "sample_type")
 
@@ -87,6 +88,44 @@ print(plt)
 pdf("outputs/figure_3_LSC/LSC_vs_Blast_relapse_accessibility_change.pdf", width = 5, height = 4)
 plt
 dev.off()
+
+
+
+#### compare LSCs vs blast similarity at diagnosis vs relapse ####
+correlations<-cor(count_matrix_collapsed)
+corr_df<-data.frame()
+
+for(p in unique(lsc_sample_info$case_timepoint)){
+  message(p)
+  corr<-correlations[unique(lsc_sample_info$sample_type[lsc_sample_info$case_timepoint==p&lsc_sample_info$type=="Blast"][1]),
+                     unique(lsc_sample_info$sample_type[lsc_sample_info$case_timepoint==p&lsc_sample_info$type=="LSC"][1])]
+  corr_df[p,"Correlation"]<-corr
+}
+corr_df$genotype_group<-lsc_sample_info$genotype_groups[match(rownames(corr_df), lsc_sample_info$case_timepoint)]
+corr_df<-corr_df[complete.cases(corr_df),]
+corr_df$type<-sapply(strsplit(rownames(corr_df), "_"),'[',2)
+corr_df$patient<-sapply(strsplit(rownames(corr_df), "_"),'[',1)
+
+corr_df$genotype_group[corr_df$genotype_group!="Stable"]<-"Unstable"
+
+plt<-ggplot(corr_df,aes(x=type, y=Correlation,group=patient, color=genotype_group)) +
+  #geom_boxplot(mapping = aes(x=type, y=Correlation), inherit.aes = F, size=1) +
+  geom_line(size=0.5) +
+  geom_point(shape=21, fill="white") +
+  scale_color_manual(name = "Genetic\nEvolution", values=c("red","darkblue")) +
+  xlab("Timepoint") +
+  ylab("LSC vs Non-LSC ATAC Similarity") +
+  theme_classic() +
+  stat_compare_means(method="t.test", paired = TRUE, comparisons = list(c("DX","REL")))
+
+print(plt)
+
+pdf("outputs/figure_3_LSC/DX_vs_REL_LSC_vs_Blast_similarity.pdf", width = 3, height = 3.5)
+plt
+dev.off()
+
+
+
 
 
 
@@ -317,6 +356,99 @@ print(plt)
 pdf("outputs/figure_3_LSC/lsc_volcano_genes_mapped.pdf", width = 5, height = 4)
 plt
 dev.off()
+
+
+
+
+
+# Do volcano plot of LSC differential analysis and map differential bulk gene signature
+
+# peaks
+blast_diff_res<-readRDS("outputs/lsc_analysis/Blast_REL_vs_DX_peak_accessibility_deseq_res_stable_cases.rds")
+lsc_diff_res<-readRDS("outputs/lsc_analysis/LSC_REL_vs_DX_peak_accessibility_deseq_res_stable_cases.rds")
+
+blast_diff_res<-blast_diff_res[complete.cases(blast_diff_res),]
+lsc_diff_res<-lsc_diff_res[complete.cases(lsc_diff_res),]
+
+top_regions<-blast_diff_res[blast_diff_res$log2FoldChange>0&blast_diff_res$padj<0.05,]
+top_regions<-rownames(top_regions)[rev(order(top_regions$log2FoldChange))][1:200]
+bottom_regions<-blast_diff_res[blast_diff_res$log2FoldChange<0&blast_diff_res$padj<0.05,]
+bottom_regions<-rownames(bottom_regions)[order(bottom_regions$log2FoldChange)][1:200]
+
+blast_diff_regions<-c(top_regions, bottom_regions)
+
+top_regions<-lsc_diff_res[lsc_diff_res$log2FoldChange>0&lsc_diff_res$padj<0.05,]
+top_regions<-rownames(top_regions)[rev(order(top_regions$log2FoldChange))][1:200]
+bottom_regions<-lsc_diff_res[lsc_diff_res$log2FoldChange<0&lsc_diff_res$padj<0.05,]
+bottom_regions<-rownames(bottom_regions)[order(bottom_regions$log2FoldChange)][1:200]
+
+lsc_diff_regions<-c(top_regions, bottom_regions)
+
+
+lsc_diff_res<-lsc_diff_res[complete.cases(lsc_diff_res),]
+
+blast_diff_res$color<-rep("",nrow(blast_diff_res))
+blast_diff_res$color[rownames(blast_diff_res)%in%lsc_diff_regions]<-"LSC Differential"
+blast_diff_res$color[rownames(blast_diff_res)%in%blast_diff_regions]<-"Blast Differential"
+
+plt<-ggplot(blast_diff_res, aes(x=log2FoldChange,y=-log10(padj), color=color)) +
+  ggrastr::rasterise(geom_point(size=0.5, alpha=0.5), dpi=300) +
+  geom_point(data = blast_diff_res[lsc_diff_regions,], size=0.5, color="red") +
+  geom_point(data = blast_diff_res[blast_diff_regions,], size=0.5, color="blue") +
+  scale_color_manual(values=c("grey30","blue","red")) +
+  theme_bw() +
+  xlab("Log2FC REL - DX") +
+  ylab("-log10(Adjusted p-val)") +
+  ggtitle("Blast Relapse vs Diagnosis Peak Acessibility") +
+  theme(plot.title = element_text(hjust=0.5),
+        axis.line = element_line(colour = "black", size = 0.1),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_text(),
+        axis.text = element_text(color="black"))
+
+print(plt)
+
+pdf("outputs/figure_3_LSC/blast_volcano_lsc_genes_mapped.pdf", width = 5, height = 4)
+plt
+dev.off()
+
+
+lsc_diff_res$color<-rep("",nrow(lsc_diff_res))
+lsc_diff_res$color[rownames(lsc_diff_res)%in%lsc_diff_regions]<-"LSC Differential"
+lsc_diff_res$color[rownames(lsc_diff_res)%in%blast_diff_regions]<-"Blast Differential"
+
+plt<-ggplot(lsc_diff_res, aes(x=log2FoldChange,y=-log10(padj), color=color)) +
+  ggrastr::rasterise(geom_point(size=0.5, alpha=0.5), dpi=300) +
+  geom_point(data = lsc_diff_res[lsc_diff_regions,], size=0.5, color="red") +
+  geom_point(data = lsc_diff_res[blast_diff_regions,], size=0.5, color="blue") +
+  scale_color_manual(values=c("grey30","black","darkred")) +
+  theme_bw() +
+  xlab("Log2FC REL - DX") +
+  ylab("-log10(Adjusted p-val)") +
+  ggtitle("LSC Relapse vs Diagnosis Peak Acessibility") +
+  theme(plot.title = element_text(hjust=0.5),
+        axis.line = element_line(colour = "black", size = 0.1),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_text(),
+        axis.text = element_text(color="black"))
+
+print(plt)
+
+pdf("outputs/figure_3_LSC/lsc_volcano_blast_genes_mapped.pdf", width = 5, height = 4)
+plt
+dev.off()
+
+
+
+
+
+
+
+
+
+
 
 
 # Find fraction of LSC significant peaks that are also significant in blasts and vice versa

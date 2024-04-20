@@ -8,6 +8,9 @@ library(openxlsx)
 library(dplyr)
 library(tibble)
 library(ComplexHeatmap)
+library(ggplot2)
+library(ggrepel)
+library(ggpubr)
 
 # set to base directory
 setwd("~/Bioinformatics/AML_relapse_project/analysis_clean/")
@@ -111,3 +114,105 @@ for(p in pts){
   print(plot)
   dev.off()
 }
+
+
+
+
+# repeat for all samples
+
+pts<-unique(mutation_data$Case)
+
+plt_list<-list()
+count<-1
+
+for(p in pts){
+  message(p)
+  
+  data<-mutation_data[mutation_data$Case==p,]
+  
+  combined_data<-data.frame(gene=c(),pos=c(),dx_vaf=c(),rel_vaf=c())
+  
+  for(pos in unique(data$pos)){
+    
+    if(length(data$VAF[data$pos==pos&data$timepoint=="Diagnosis"])>0){
+      dx_vaf<-data$VAF[data$pos==pos&data$timepoint=="Diagnosis"]
+    }else{
+      dx_vaf<-0
+    }
+    
+    if(length(data$VAF[data$pos==pos&data$timepoint=="Relapse"])>0){
+      rel_vaf<-data$VAF[data$pos==pos&data$timepoint=="Relapse"]
+    }else{
+      rel_vaf<-0
+    }
+    
+    group<-"Stable"
+    if(dx_vaf<0.05&rel_vaf>0.1){group<-"Gain"}
+    if(rel_vaf<0.05&dx_vaf>0.1){group<-"Loss"}
+    
+    
+    combined_data<-rbind(combined_data,
+                         data.frame(gene=unique(data$Gene.refGene[data$pos==pos]),
+                                    pos=c(pos),
+                                    dx_vaf=dx_vaf,
+                                    rel_vaf=rel_vaf,
+                                    group=group))
+  }
+  
+  col = c(Stable = "#EE3A2D", Gain = "#2270B6", Loss="#70ACD4")
+  
+  print(combined_data)
+  
+  plt_input<-reshape2::melt(combined_data, id=c("gene","pos","group"))
+  
+  plt_input$label<-plt_input$gene
+  plt_input$label[plt_input$variable=="dx_vaf"]<-""
+  
+  plt_input$variable<-as.character(plt_input$variable)
+  
+  plt_input$variable[plt_input$variable=="dx_vaf"]<-"DX VAF"
+  plt_input$variable[plt_input$variable=="rel_vaf"]<-"REL VAF"
+  
+  plot<-ggplot(data = plt_input, aes(x = variable, y = as.numeric(value), group = pos, color=group, label=label))+
+    geom_line(size=0.8) +
+    geom_point() +
+    theme_classic() +
+    scale_color_manual(NULL,values=col) +
+    scale_y_continuous(limits=c(0,1)) +
+    xlab(NULL) +
+    ylab("Variant Allele Frequency") +
+    geom_label_repel(color="black", max.overlaps = Inf) +
+    ggtitle(paste(p,"VAF Plot"))
+  
+  print(plot)
+  
+  pdf(paste0("outputs/bulk_genotyping_plots_all_pts/",p,"_mutation_vaf_plot.pdf"), width = 5, height = 4)
+  print(plot)
+  dev.off()
+  
+  plot<-ggplot(data = plt_input, aes(x = variable, y = as.numeric(value), group = pos, color=group, label=label))+
+    geom_line(size=0.8) +
+    geom_point() +
+    theme_classic() +
+    scale_color_manual(NULL,values=col) +
+    scale_y_continuous(limits=c(0,1)) +
+    xlab(NULL) +
+    ylab("Variant Allele Frequency") +
+    ggtitle(paste(p,"VAF Plot"))
+  
+  print(plot)
+  
+  if(sum(combined_data$group=="Stable")==nrow(combined_data)){
+    plt_list[[count]]<-plot
+    count<-count+1
+  }
+  
+  pdf(paste0("outputs/bulk_genotyping_plots_all_pts/",p,"_mutation_vaf_plot_no_labels.pdf"), width = 5, height = 4)
+  print(plot)
+  dev.off()
+}
+
+pdf(paste0("outputs/bulk_genotyping_plots_all_pts/all_stable_pts_mutation_vaf_plot_no_labels.pdf"), width = 12, height = 6)
+ggarrange(plotlist = plt_list)
+dev.off()
+

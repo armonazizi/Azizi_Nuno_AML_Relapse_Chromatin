@@ -53,7 +53,8 @@ normalize_count_matrix<-function(count_matrix, log=TRUE, quantile=TRUE){
 collapse_count_matrix<-function(count_matrix, sample_ref, id="sample"){
   result<-count_matrix[,c()]
   for(s in unique(sample_ref[,id])){
-    result[,s]<-rowMeans(cbind(count_matrix[,sample_ref$name[sample_ref[,id]==s&sample_ref$replicate==1]],count_matrix[,sample_ref$name[sample_ref[,id]==s&sample_ref$replicate==2]]))
+    result[,s]<-rowMeans(cbind(count_matrix[,sample_ref$name[sample_ref[,id]==s&sample_ref$replicate==1]],
+                               count_matrix[,sample_ref$name[sample_ref[,id]==s&sample_ref$replicate==2]]))
   }
   return(result)
 }

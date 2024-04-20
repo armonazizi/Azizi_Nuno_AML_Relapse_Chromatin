@@ -6,6 +6,8 @@
 setwd("~/Bioinformatics/AML_relapse_project/analysis_clean/")
 source("scripts/00_global_ATAC_functions.R")
 
+library(ggrastr)
+
 # Read metadata and genotyping info
 sample_info<-openxlsx::read.xlsx("inputs/bulk_sample_info/sample_info.xlsx")
 genotyping_info<-openxlsx::read.xlsx("inputs/genotyping_formatted_V2.xlsx")
@@ -75,6 +77,8 @@ deseq_Results <- results(dds, contrast=c("timepoint","REL","DX"))
 deseq_Results<-as.data.frame(deseq_Results)
 saveRDS(deseq_Results, "outputs/bulk_analysis/REL_vs_DX_peak_accessibility_deseq_res_stable_cases.rds")
 openxlsx::write.xlsx(rownames_to_column(deseq_Results),"outputs/bulk_analysis/REL_vs_DX_peak_accessibility_deseq_res_stable_cases.xlsx",row.names=F)
+
+deseq_Results<-readRDS("outputs/bulk_analysis/REL_vs_DX_peak_accessibility_deseq_res_stable_cases.rds")
 
 deseq_Results$color<-rep("stable",nrow(deseq_Results))
 deseq_Results$color[deseq_Results$padj<0.05&deseq_Results$log2FoldChange>0.25]<-"up"
@@ -391,6 +395,99 @@ hm<-Heatmap(heatmap_input,
 pdf("outputs/figure_2/bulk_non_stable_rel_vs_dx_gene_accessibility_heatmap_diff_stable_genes.pdf", width = 6, height = 4)
 print(hm)
 dev.off()
+
+
+
+
+
+
+
+# Heatmap of differential stable genes in all samples with clonal group annotated
+bulk_sample_info_sub<-bulk_sample_info
+bulk_sample_info_sub<-bulk_sample_info_sub[!is.na(bulk_sample_info_sub$name),]
+bulk_sample_info_sub<-bulk_sample_info_sub[!is.na(bulk_sample_info_sub$genotype_groups),]
+
+gene_scores<-readRDS("inputs/bulk_gene_scores.rds")
+gene_scores<-column_to_rownames(gene_scores,"Gene")
+count_matrix_normalized<-normalize_count_matrix(gene_scores)
+top_regions<-deseq_Results[deseq_Results$log2FoldChange>0&deseq_Results$padj<0.05,]
+top_regions<-rownames(top_regions)[rev(order(top_regions$log2FoldChange))][1:50]
+bottom_regions<-deseq_Results[deseq_Results$log2FoldChange<0&deseq_Results$padj<0.05,]
+bottom_regions<-rownames(bottom_regions)[order(bottom_regions$log2FoldChange)][1:50]
+heatmap_input<-count_matrix_normalized[c(top_regions,bottom_regions),
+                                       c(unique(bulk_sample_info_sub$name[bulk_sample_info_sub$timepoint=="DX"]),
+                                         unique(bulk_sample_info_sub$name[bulk_sample_info_sub$timepoint=="REL"]))]
+
+for(p in unique(bulk_sample_info_sub$patient)){
+  message(p)
+  heatmap_input[,unique(bulk_sample_info_sub$name[bulk_sample_info_sub$patient==p])]<-
+    as.data.frame(t(scale(t(heatmap_input[,unique(bulk_sample_info_sub$name[bulk_sample_info_sub$patient==p])]))))
+}
+
+heatmap_input<-collapse_count_matrix(heatmap_input, bulk_sample_info_sub)
+heatmap_input<-heatmap_input[c(top_regions,bottom_regions),
+                             c(unique(bulk_sample_info_sub$sample[bulk_sample_info_sub$timepoint=="DX"]),
+                               unique(bulk_sample_info_sub$sample[bulk_sample_info_sub$timepoint=="REL"]))]
+
+# Reorder dataframe
+bulk_sample_info_sub$genotype_groups<-factor(bulk_sample_info_sub$genotype_groups, levels=c("Stable","Gain","Loss","Gain_Loss"))
+sample_order<-unique(bulk_sample_info_sub$sample[order(bulk_sample_info_sub$genotype_groups, bulk_sample_info_sub$timepoint)])
+heatmap_input<-heatmap_input[,sample_order]
+
+
+if(T){
+  annotations<-data.frame(bulk_sample_info_sub,stringsAsFactors = TRUE)
+  annotations<-unique(annotations[,c("sample","timepoint","genotype_groups")])
+  rownames(annotations)<-NULL
+  annotations<-column_to_rownames(annotations, "sample")
+  annotations<-annotations[colnames(heatmap_input),,drop=FALSE]
+  colnames(annotations)<-c("Timepoint", "Clonal_Group")
+  annotations$Timepoint<-as.factor(annotations$Timepoint)
+  samples<-rownames(annotations)
+  annotations<-as.data.frame(unclass(annotations))
+  rownames(annotations)<-samples
+  genotype_colors<-c("darkred","darkblue")
+  clonal_colors<-c(Stable = "#EE3A2D", Gain = "#2270B6", Loss="#70ACD4", `Gain_Loss`="#193D6C")
+  names(genotype_colors)<-levels(annotations$Timepoint)
+  names(clonal_colors)<-levels(annotations$Clonal_Group)
+  anno_colors<-list(Timepoint=genotype_colors, Clonal_Group=clonal_colors)
+}
+
+hm<-Heatmap(heatmap_input, 
+            cluster_columns = FALSE,
+            cluster_rows = FALSE,
+            col=colorRamp2(seq(-0.75,0.75,length.out = 10), viridis(10)),
+            show_row_names=F, 
+            show_column_names=T,
+            heatmap_legend_param = list(title = "Row Z-Scores"),
+            #column_title="Non-Stable Samples Differential Gene Accessibility",
+            top_annotation=HeatmapAnnotation(df=annotations, col=anno_colors, annotation_name_side = "left"),
+            row_names_gp = gpar(fontsize = 8),
+            column_names_gp = gpar(fontsize = 8),
+            column_split = annotations$Clonal_Group,
+            left_annotation = rowAnnotation(genes = anno_mark(at = 1:20, 
+                                                              labels = rownames(heatmap_input)[1:20], 
+                                                              side="left",
+                                                              labels_gp = gpar(fontsize = 8),
+                                                              link_width =unit(5, "mm"),
+                                                              padding = 0.7)),
+            right_annotation = rowAnnotation(genes = anno_mark(at = 81:100, 
+                                                               labels = rownames(heatmap_input)[81:100], 
+                                                               side="right",
+                                                               labels_gp = gpar(fontsize = 8),
+                                                               link_width =unit(5, "mm"),
+                                                               padding = 0.7)))
+
+pdf("outputs/figure_2/bulk_all_samples_rel_vs_dx_gene_accessibility_heatmap_diff_stable_genes.pdf", width = 10, height = 4)
+print(hm)
+dev.off()
+
+
+
+
+
+
+
 
 
 
