@@ -1,5 +1,5 @@
-# Azizi_Nuno_AML_Relapse_Chromatin
-Code associated with Nuno/Azizi et al. *eLife* 2024, for the analysis of bulk and single cell ATACseq data of relapsed AML.
+# Azizi/Nuno eLife 2024
+Code associated with the Nuno/Azizi et al. *eLife* 2024 publication "Convergent epigenetic evolution drives relapse in acute myeloid leukemia", for the analysis of bulk and single cell ATACseq data of relapsed AML.
 
 Raw and processed data available at [GSE256495](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE256495).
 
