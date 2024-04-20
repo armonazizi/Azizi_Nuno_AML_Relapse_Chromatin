@@ -1,6 +1,6 @@
 # Azizi_Nuno_AML_Relapse_Chromatin
-Code associated with Nuno/Azizi et al. for the analysis of bulk and single cell ATACseq data of relapsed AML.
+Code associated with Nuno/Azizi et al. *eLife* 2024, for the analysis of bulk and single cell ATACseq data of relapsed AML.
 
-Raw data will be added to the GEO database in the future. 
+Raw and processed data available at [GSE256495](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE256495).
 
-To request access to proccessed data files needed to run this codebase, please contact Armon Azizi (aazizi@stanford.edu).
+To request further access to proccessed data files needed to run this codebase, please contact Armon Azizi (armonazizi@gmail.com).
